@@ -1,6 +1,7 @@
 streamlit
-google-generativeai
+google-genai
 folium
 streamlit-folium
 geopy
+
 pandas
