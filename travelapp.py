@@ -182,6 +182,13 @@ tab_planner, tab_notes = st.tabs(["🗺️ Trip Planner", "📝 Key Notes & Plan
 
 # --- TAB 1: MAIN PLANNER ---
 with tab_planner:
+    # 1. Initialize session state to REMEMBER the itinerary across re-runs
+    if 'itinerary_data' not in st.session_state:
+        st.session_state['itinerary_data'] = None
+        st.session_state['dest'] = ""
+        st.session_state['dur'] = 0
+        st.session_state['budg'] = 0
+
     with st.form("travel_form"):
         col1, col2 = st.columns(2)
         with col1:
@@ -201,60 +208,67 @@ with tab_planner:
             st.error("Please enter a destination.")
         else:
             with st.spinner(f"Planning your {duration}-day student trip to {destination}..."):
-                
-                itinerary_data = generate_itinerary(api_key, destination, duration, budget, interests)
-                
-                if itinerary_data:
+                new_itinerary = generate_itinerary(api_key, destination, duration, budget, interests)
+                if new_itinerary:
+                    # 2. Save the newly generated AI data to memory!
+                    st.session_state['itinerary_data'] = new_itinerary
+                    st.session_state['dest'] = destination
+                    st.session_state['dur'] = duration
+                    st.session_state['budg'] = budget
                     st.success("Itinerary generated successfully!")
-                    
-                    # Layout: Trip Overview & Download Button
-                    st.subheader("📊 Trip Overview")
-                    st.write(itinerary_data.get("trip_summary", ""))
-                    
-                    est_cost = itinerary_data.get("estimated_total_cost", 0)
-                    delta = budget - est_cost
-                    
-                    metric_col1, metric_col2, metric_col3 = st.columns(3)
-                    metric_col1.metric("Your Budget", f"${budget}")
-                    metric_col2.metric("Estimated Cost", f"${est_cost}", delta=f"${delta} remaining", delta_color="normal")
-                    
-                    if est_cost > budget:
-                        st.warning("Warning: The AI estimated cost slightly exceeds your strict budget. Review the activities below to cut costs!")
 
-                    # Download Button
-                    download_text = generate_download_text(itinerary_data, destination, duration, budget)
-                    st.download_button(
-                        label="📄 Download Itinerary (Text File)",
-                        data=download_text,
-                        file_name=f"{destination.replace(' ', '_')}_itinerary.txt",
-                        mime="text/plain"
-                    )
+    # 3. DISPLAY UI ONLY IF DATA EXISTS IN MEMORY
+    if st.session_state['itinerary_data']:
+        saved_data = st.session_state['itinerary_data']
+        saved_dest = st.session_state['dest']
+        saved_dur = st.session_state['dur']
+        saved_budg = st.session_state['budg']
+        
+        st.subheader("📊 Trip Overview")
+        st.write(saved_data.get("trip_summary", ""))
+        
+        est_cost = saved_data.get("estimated_total_cost", 0)
+        delta = saved_budg - est_cost
+        
+        metric_col1, metric_col2, metric_col3 = st.columns(3)
+        metric_col1.metric("Your Budget", f"${saved_budg}")
+        metric_col2.metric("Estimated Cost", f"${est_cost}", delta=f"${delta} remaining", delta_color="normal")
+        
+        if est_cost > saved_budg:
+            st.warning("Warning: The AI estimated cost slightly exceeds your strict budget. Review the activities below to cut costs!")
 
-                    st.markdown("---")
-                    
-                    # Map Integration with Theme Selector
-                    st.subheader("🗺️ Your Travel Map")
-                    map_style = st.radio("Select Map Theme:", ["Standard", "Dark Mode", "Terrain"], horizontal=True)
-                    
-                    with st.spinner("Plotting locations on the map..."):
-                        travel_map = create_itinerary_map(itinerary_data, destination, map_style)
-                        st_folium(travel_map, width=1000, height=500, returned_objects=[])
-                    
-                    st.markdown("---")
-                    
-                    # Day-by-Day Itinerary Layout
-                    st.subheader("📅 Daily Itinerary")
-                    for day in itinerary_data.get("itinerary", []):
-                        day_num = day.get("day")
-                        with st.expander(f"Day {day_num} Itinerary", expanded=True):
-                            activities = day.get("activities", [])
-                            if activities:
-                                df = pd.DataFrame(activities)
-                                df = df[["time", "place_name", "description", "estimated_cost"]]
-                                df.columns = ["Time", "Place", "Description", "Estimated Cost ($)"]
-                                st.dataframe(df, use_container_width=True, hide_index=True)
-                            else:
-                                st.write("No activities scheduled for this day.")
+        download_text = generate_download_text(saved_data, saved_dest, saved_dur, saved_budg)
+        st.download_button(
+            label="📄 Download Itinerary (Text File)",
+            data=download_text,
+            file_name=f"{saved_dest.replace(' ', '_')}_itinerary.txt",
+            mime="text/plain"
+        )
+
+        st.markdown("---")
+        
+        st.subheader("🗺️ Your Travel Map")
+        # When you click this radio button, the script reruns, but memory stays intact!
+        map_style = st.radio("Select Map Theme:", ["Standard", "Dark Mode", "Terrain"], horizontal=True)
+        
+        with st.spinner("Updating map theme..."):
+            travel_map = create_itinerary_map(saved_data, saved_dest, map_style)
+            st_folium(travel_map, width=1000, height=500, returned_objects=[])
+        
+        st.markdown("---")
+        
+        st.subheader("📅 Daily Itinerary")
+        for day in saved_data.get("itinerary", []):
+            day_num = day.get("day")
+            with st.expander(f"Day {day_num} Itinerary", expanded=True):
+                activities = day.get("activities", [])
+                if activities:
+                    df = pd.DataFrame(activities)
+                    df = df[["time", "place_name", "description", "estimated_cost"]]
+                    df.columns = ["Time", "Place", "Description", "Estimated Cost ($)"]
+                    st.dataframe(df, use_container_width=True, hide_index=True)
+                else:
+                    st.write("No activities scheduled for this day.")
 
 # --- TAB 2: KEY NOTES ---
 with tab_notes:
