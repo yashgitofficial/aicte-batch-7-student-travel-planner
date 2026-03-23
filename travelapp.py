@@ -4,7 +4,10 @@ from google.genai import types
 import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut, GeocoderUnavailable
+# --- ADDED NEW IMPORTS HERE ---
+from geopy.exc import GeocoderTimedOut, GeocoderUnavailable, GeocoderRateLimited
+import time 
+# ------------------------------
 import pandas as pd
 import json
 import re
@@ -17,14 +20,18 @@ import re
 def geocode_address(address):
     """
     Converts an address string to latitude and longitude.
-    Uses st.cache_data to prevent hitting Geopy API limits for repeated addresses.
+    Uses st.cache_data and time.sleep to prevent hitting Geopy API limits.
     """
-    geolocator = Nominatim(user_agent="student_ai_travel_planner")
+    # THE MAGIC FIX: Pause for 1.5 seconds to respect the 1-request-per-second rule
+    time.sleep(1.5)
+    
+    geolocator = Nominatim(user_agent="student_ai_travel_planner_v2")
     try:
         location = geolocator.geocode(address, timeout=5)
         if location:
             return location.latitude, location.longitude
-    except (GeocoderTimedOut, GeocoderUnavailable):
+    except (GeocoderTimedOut, GeocoderUnavailable, GeocoderRateLimited):
+        # Catch the rate limit error so the app continues running smoothly
         return None
     return None
 
